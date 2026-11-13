@@ -1,0 +1,16 @@
+.env
+data/
+venv/
+__pycache__/
+*.pyc
+*.bak
+*.tgz
+.env.*
+!.env.example
+bot.bak*/
+*.bak*
+*.db
+*.sqlite3
+*.sql
+*.tar.gz
+*.zip
