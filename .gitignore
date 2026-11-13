@@ -14,3 +14,10 @@ bot.bak*/
 *.sql
 *.tar.gz
 *.zip
+backups/
+.env
+data/
+backups/
+venv/
+__pycache__/
+*.orig
