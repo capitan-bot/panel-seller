@@ -4,7 +4,7 @@ import asyncio
 import logging
 import time
 
-from . import admin, btnadm, kbmenu, usagecard, uiadm, config, db, manage, paneladm, report, stats, user, usersadm, warn
+from . import admin, btnadm, webadm, kbmenu, usagecard, uiadm, config, db, manage, paneladm, report, stats, user, usersadm, warn
 from .panel import get_pg
 from . import monitor
 from . import backup
@@ -65,6 +65,7 @@ async def main() -> None:
     dp.include(stats.router)
     dp.include(paneladm.router)
     dp.include(btnadm.router)
+    dp.include(webadm.router)
     dp.include(kbmenu.router)
     dp.include(usagecard.router)
     dp.include(uiadm.router)

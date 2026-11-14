@@ -27,3 +27,9 @@ backups/
 venv/
 __pycache__/
 *.orig
+.env
+data/
+backups/
+venv/
+__pycache__/
+*.orig
