@@ -55,6 +55,7 @@ def days_left(ts: int) -> int:
     return max(0, -(-(ts - int(time.time())) // 86400))
 
 
+PE: dict = {}   # auto premium emoji {plain: custom_emoji_id}
 OV: dict = {}   # admin overrides per button label: {default_text: (title, emoji_id, style)}
 
 
@@ -62,6 +63,10 @@ async def load_ov() -> None:
     OV.clear()
     for r in await db.rows("SELECT * FROM ubtn"):
         OV[r["key"]] = (r["title"], r["emoji_id"], r["style"])
+    PE.clear()
+    await db.run("CREATE TABLE IF NOT EXISTS pemoji(plain TEXT PRIMARY KEY, emoji_id TEXT NOT NULL)")
+    for r in await db.rows("SELECT * FROM pemoji"):
+        PE[r["plain"]] = r["emoji_id"]
 
 
 def _build(text: str, emoji: str, style: str, ov: bool, extra: dict) -> dict:
@@ -69,6 +74,14 @@ def _build(text: str, emoji: str, style: str, ov: bool, extra: dict) -> dict:
     if o:
         text, emoji = o[0] or text, o[1] or emoji
         style = "" if o[2] == "none" else (o[2] or style)
+    if not emoji and PE:
+        t2 = text.replace("\ufe0f", "")
+        for p, e in PE.items():
+            if p in t2:
+                rest = t2.replace(p, "", 1).strip()
+                if rest:
+                    text, emoji = rest, e
+                break
     b = {"text": text, **extra}
     if emoji:
         b["icon_custom_emoji_id"] = emoji

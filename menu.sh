@@ -202,6 +202,7 @@ UNIT
   sleep 2
   if systemctl is-active --quiet "$SERVICE"; then
     echo -e "${GREEN}✔ Installed and running. Use the command: pgbot${RST}"
+    notify_installed
   else
     echo -e "${RED}✘ Service did not start. Check: Get logs (4)${RST}"
   fi

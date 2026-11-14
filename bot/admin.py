@@ -468,7 +468,7 @@ async def home(ev):
         [btn("📊 آمار ربات", "s:m", style="primary")],
         [btn("👥 کاربران", "x:m"), btn("🧾 رسیدها", "a:rcpt")],
         [btn("🗂 فروخته‌شده", "a:sold"), btn("📦 محصولات", "a:prs")],
-        [btn("🎛 دکمه‌ها", "b:m"), btn("🛰 اتصال پنل", "a:panel")],
+        [btn("🛠 مدیریت تغییرات ظاهری", "ux:m"), btn("🛰 اتصال پنل", "a:panel")],
         [btn("📢 پیام همگانی", "a:bc"), btn("⚙️ تنظیمات", "a:set")],
     ]
     codes_btn = btn("🎟 کد تخفیف/هدیه", "a:cd", style="success")

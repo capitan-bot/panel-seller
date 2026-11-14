@@ -48,3 +48,16 @@ header() {
   hr
   echo
 }
+
+# ---- Message sent to admins after install ----
+notify_installed() {
+  local token ids id msg
+  token=$(get_env BOT_TOKEN); ids=$(get_env ADMIN_TELEGRAM_IDS)
+  if [ -z "$token" ] || [ -z "$ids" ]; then return; fi
+  msg=$'✅ ربات شما ساخته شد\n\nبرای ورود به پنل ادمین بزنید:\n/admin\n\n🤖 ساخته شده از CAPITAN VPN'
+  for id in ${ids//,/ }; do
+    curl -s -m 15 "https://api.telegram.org/bot${token}/sendMessage" \
+      --data-urlencode "chat_id=$id" \
+      --data-urlencode "text=$msg" >/dev/null
+  done
+}

@@ -30,6 +30,11 @@ class Bot:
                                       timeout=httpx.Timeout(70.0, connect=10.0), transport=transport)
 
     async def api(self, method: str, **params):
+        try:
+            from .premtext import premium_params
+            premium_params(method, params)
+        except Exception:
+            pass
         params = {k: v for k, v in params.items() if v is not None}
         try:
             r = await self.http.post(method, json=params)

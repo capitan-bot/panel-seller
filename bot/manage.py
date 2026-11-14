@@ -68,6 +68,7 @@ def home_markup(x, base: str) -> dict:
         [btn("📊 مشخصات و مصرف", f"m:i:{i}", style="success"), btn("🔑 تغییر رمز", f"m:pw:{i}", style="primary")],
         [btn("👤 تغییر نام کاربری", f"m:un:{i}", style="primary"), btn("✏️ تغییر نام سرویس", f"m:nn:{i}", style="primary")],
         [btn("💳 خرید حجم", f"m:bv:{i}", style="success"), btn("📥 انتقال مالکیت", f"m:tr:{i}", style="primary")],
+        [btn("🪪 کارت مصرف", f"cd:{i}", style="success")],
         [btn("🔄 بروزرسانی", f"m:r:{i}", style="primary")],
         [btn("📦 پنل‌های من", "u:panels", style="success")]])
 
