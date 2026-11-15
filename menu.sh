@@ -225,10 +225,12 @@ do_update() {
   cd "$APP_DIR" || return
   make_backup pre-update
   echo -e "${CYAN}Pulling latest version...${RST}"
-  { git stash -q >/dev/null 2>&1; git pull --ff-only; } || { echo -e "${RED}git pull failed (local changes?). Bot not restarted.${RST}"; return; }
+  git fetch origin || { echo -e "${RED}git fetch failed. Bot not restarted.${RST}"; return; }
+  local br; br=$(git symbolic-ref --short -q HEAD || echo main)
+  git reset --hard "origin/$br" || { echo -e "${RED}git reset failed. Bot not restarted.${RST}"; return; }
+  chmod +x "$APP_DIR/menu.sh"
   ./venv/bin/pip install -q -r requirements.txt
   systemctl restart "$SERVICE"; sleep 2
-  systemctl restart pgbot-web 2>/dev/null; systemctl restart pgbot-gw 2>/dev/null
   systemctl is-active --quiet "$SERVICE" && echo -e "${GREEN}✔ Updated and running.${RST}" || echo -e "${RED}✘ Not running, check logs.${RST}"
 }
 
