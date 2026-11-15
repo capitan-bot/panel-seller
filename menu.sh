@@ -322,7 +322,7 @@ source "$APP_DIR/theme.sh"
 # ---------- main loop ----------
 while true; do
   header
-  printf "${BLUE}➜ ${CYAN}Select [0-8]: ${RST}"
+  printf "${BLUE}➜ ${CYAN}Select [0-9]: ${RST}"
   read -r c
   echo
   case "$c" in
@@ -334,6 +334,7 @@ while true; do
     6) do_restore; pause;;
     7) do_token; pause;;
     8) do_ids; pause;;
+    9) bash "$APP_DIR/webpanel_setup.sh"; pause;;
     0) clear; exit 0;;
     *) ;;
   esac

@@ -33,3 +33,5 @@ backups/
 venv/
 __pycache__/
 *.orig
+gw/gw.json
+gw/gw.env

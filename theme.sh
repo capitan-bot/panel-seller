@@ -42,6 +42,7 @@ header() {
   sec "SETTINGS"
   item 7 "🔑" "Change bot token"
   item 8 "🆔" "Change admin IDs"
+  item 9 "🌐" "Web panel setup"
   echo
   hr
   item 0 "🚪" "Exit"

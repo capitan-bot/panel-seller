@@ -19,7 +19,7 @@ def B(text: str, data: str, style: str = "") -> dict:
 def info():
     from web import app as W
     dom = W.env("WEB_DOMAIN").replace("https://", "").replace("http://", "").strip("/ ")
-    slug = W.get_slug()
+    slug = W.get_prefix()
     return dom, (f"https://{dom}/{slug}/" if dom else "")
 
 
