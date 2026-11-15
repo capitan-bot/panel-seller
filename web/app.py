@@ -120,11 +120,28 @@ def is_https(req) -> bool:
     return req.headers.get("X-Forwarded-Proto") == "https" or req.secure
 
 
+def cookie_vals(req) -> list:
+    out = []
+    for part in req.headers.get("Cookie", "").split(";"):
+        k, _, v = part.strip().partition("=")
+        if k == "pgweb" and v:
+            out.append(v)
+    return out
+
+
+def valid_uid(req, secret):
+    for v in cookie_vals(req):
+        u = check_cookie(v, secret)
+        if u is not None:
+            return u
+    return None
+
+
 @web.middleware
 async def guard(req, handler):
     if not req.path[len(PFX):].startswith(("/login", "/static/")):
         a = load_auth()
-        uid = check_cookie(req.cookies.get("pgweb", ""), a["secret"]) if a else None
+        uid = valid_uid(req, a["secret"]) if a else None
         if uid is None:
             if req.path[len(PFX):].startswith("/api/"):
                 raise web.HTTPUnauthorized()
@@ -297,6 +314,7 @@ async def login_post(req):
     resp = web.HTTPFound("/")
     resp.set_cookie("pgweb", make_cookie(int(u), a["secret"]), max_age=7 * 86400, httponly=True,
                     samesite="Lax", secure=is_https(req), path=(PFX or "/"))
+    resp.headers.add("Set-Cookie", "pgweb=; Max-Age=0; Path=/")
     raise resp
 
 

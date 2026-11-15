@@ -277,3 +277,29 @@ def install(app):
     except Exception:
         import traceback
         traceback.print_exc()
+
+
+_stats_install = install
+
+
+def install(app):
+    _stats_install(app)
+    try:
+        from . import fx
+        fx.install(app)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+
+
+_fx_install = install
+
+
+def install(app):
+    _fx_install(app)
+    try:
+        from . import adders
+        adders.install(app)
+    except Exception:
+        import traceback
+        traceback.print_exc()
