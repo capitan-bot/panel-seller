@@ -28,7 +28,7 @@ async def page(ev, note: str = "") -> None:
     uid = ev.from_user.id
     if not dom:
         text = (f"{note}🌐 <b>پنل وب</b>\n\nدامنه تنظیم نشده. روی سرور بزن:\n"
-                "<code>echo 'WEB_DOMAIN=web.example.com' >> /opt/pgbot/.env</code>\n"
+                "<code>pgbot</code> ← گزینه 9 (Web panel setup)\n"
                 "بعد دوباره همین صفحه را باز کن.")
         rows = []
     else:
