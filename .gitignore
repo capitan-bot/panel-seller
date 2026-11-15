@@ -41,3 +41,4 @@ backups/
 venv/
 pycache/
 *.orig
+*.pem
