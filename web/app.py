@@ -28,6 +28,7 @@ TZ = 12600
 TZI = timezone(timedelta(seconds=TZ))
 FAILS: dict = {}
 PFX = ""
+GWTOK = ""
 SEC = {"X-Frame-Options": "DENY", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "same-origin",
        "Cache-Control": "no-store",
        "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; "
@@ -108,8 +109,8 @@ def check_cookie(val: str, secret: str):
 
 
 def client_ip(req) -> str:
-    if req.remote in ("127.0.0.1", "::1"):
-        xf = req.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+    if req.remote in ("127.0.0.1", "::1") or GWTOK:
+        xf = req.headers.get("X-Forwarded-For", "").split(",")[-1].strip()
         if xf:
             return xf
     return req.remote or "?"
@@ -295,13 +296,13 @@ async def login_post(req):
         return login_page("نام کاربری یا رمز اشتباه است.", 401)
     resp = web.HTTPFound("/")
     resp.set_cookie("pgweb", make_cookie(int(u), a["secret"]), max_age=7 * 86400, httponly=True,
-                    samesite="Lax", secure=is_https(req), path="/")
+                    samesite="Lax", secure=is_https(req), path=(PFX or "/"))
     raise resp
 
 
 async def logout(req):
     resp = web.HTTPFound("/login")
-    resp.del_cookie("pgweb", path="/")
+    resp.del_cookie("pgweb", path=(PFX or "/"))
     raise resp
 
 
@@ -345,6 +346,16 @@ def get_slug() -> str:
     return s
 
 
+def get_prefix() -> str:
+    parts = [re.sub(r"[^a-z0-9_]", "", x.lower()) for x in env("WEB_PREFIX").strip("/ ").split("/")]
+    parts = [x for x in parts if x]
+    return "/".join(parts) or get_slug()
+
+
+async def gw_ping(req):
+    return web.json_response({"ok": True, "id": hashlib.sha256(GWTOK.encode()).hexdigest()})
+
+
 def fix(t: str) -> str:
     p = PFX
     for a, b in (('href="/', 'href="%s/' % p), ('action="/', 'action="%s/' % p), ("url(/static/", "url(%s/static/" % p),
@@ -355,6 +366,8 @@ def fix(t: str) -> str:
 
 @web.middleware
 async def prefix_mw(req, handler):
+    if GWTOK and not hmac.compare_digest(req.headers.get("X-GW-Token", ""), GWTOK):
+        return web.Response(status=403, text="forbidden")
     try:
         resp = await handler(req)
     except web.HTTPFound as e:
@@ -368,11 +381,12 @@ async def prefix_mw(req, handler):
 
 
 def main():
-    global PFX, MAIN_HTML
+    global PFX, MAIN_HTML, GWTOK
+    GWTOK = env("WEB_GW_TOKEN")
     if len(sys.argv) > 1 and sys.argv[1] == "setpass":
         print("password:", set_password(sys.argv[2] if len(sys.argv) > 2 else None))
         return
-    PFX = "/" + get_slug()
+    PFX = "/" + get_prefix()
     print("db:", db_path(), "| admins:", sorted(admin_ids()), "| listen:", f"{HOST}:{PORT}", "| path:", PFX, flush=True)
     if not load_auth():
         print("No password set. Run: python -m web.app setpass", flush=True)
@@ -393,8 +407,14 @@ def main():
 
     root = web.Application(middlewares=[prefix_mw])
     root.router.add_get(PFX, bare)
+    root.router.add_get("/__gw/ping", gw_ping)
     root.add_subapp(PFX, sub)
-    web.run_app(root, host=HOST, port=PORT, access_log=None, print=None)
+    ctx = None
+    if env("WEB_TLS_CERT") and env("WEB_TLS_KEY"):
+        import ssl
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(env("WEB_TLS_CERT"), env("WEB_TLS_KEY"))
+    web.run_app(root, host=HOST, port=PORT, ssl_context=ctx, access_log=None, print=None)
 
 
 if __name__ == "__main__":
