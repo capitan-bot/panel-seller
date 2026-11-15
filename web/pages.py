@@ -11,9 +11,10 @@ from aiohttp import web
 
 from . import app as A
 
+ICONS = {'dash': '<svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>', 'users': '<svg class="ic" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/></svg>', 'shop': '<svg class="ic" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>', 'reports': '<svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>', 'panels': '<svg class="ic" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>', 'buttons': '<svg class="ic" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="8" rx="4"/><path d="M8 12h8"/></svg>', 'settings': '<svg class="ic" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>', 'out': '<svg class="ic" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>'}
 NAV = [("dash", "/", "داشبورد", "▦"), ("users", "/users", "کاربران", "👥"), ("shop", "/shop", "فروشگاه", "🛍"),
        ("reports", "/reports", "گزارش‌ها", "📊"), ("panels", "/panels", "مدیریت پنل‌ها", "🖥"),
-       ("settings", "/settings", "تنظیمات", "⚙")]
+       ("buttons", "/buttons", "دکمه‌های بات", "▣"), ("manage", "/manage", "مدیریت بات", "▣"), ("settings", "/settings", "تنظیمات", "⚙")]
 SECRET = re.compile(r"pass|^pw$|token|secret|enc", re.I)
 XCSS = (".tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:10px 12px;"
         "border-bottom:1px solid var(--bd);text-align:right;white-space:nowrap}th{color:var(--mu);font-weight:400}"
@@ -28,9 +29,19 @@ def esc(s):
 
 
 def side(active):
-    it = "".join(f'<a class="it{" act" if k == active else ""}" href="{u}">{t} <span>{i}</span></a>' for k, u, t, i in NAV)
-    return ('<aside class="side" id="side"><div class="mt">منوی اصلی</div>' + it +
-            '<form class="lo" method="post" action="/logout"><button>خروج از پنل</button></form></aside>')
+    out = []
+    for k, u, t, i in NAV:
+        if k == "GROUP":
+            subs = "".join(f'<a href="{su}" style="padding:10px 12px;border-radius:10px;color:#9a9aa8;text-decoration:none;font-size:14px">{st}</a>' for su, st in SUB)
+            out.append('<div class="grp"><button type="button" class="gh" style="width:100%;display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:12px;border:1px solid transparent;background:none;color:inherit;font-family:inherit;font-size:15px;cursor:pointer" '
+                       'onclick="var d=this.nextElementSibling;d.style.display=d.style.display===\'flex\'?\'none\':\'flex\';this.querySelector(\'.ar\').textContent=d.style.display===\'flex\'?\'▴\':\'▾\'">'
+                       'مدیریت بات <span class="ar" style="font-size:12px;color:#9a9aa8">▾</span><span style="margin-right:auto">' + ICONS["manage"] + '</span></button>'
+                       '<div class="sb" style="display:none;flex-direction:column;gap:2px;margin:2px 14px 6px 0;padding-right:12px;border-right:2px solid #2a2a40">' + subs + '</div></div>')
+        else:
+            out.append(f'<a class="it{" act" if k == active else ""}" href="{u}">{t} {ICONS.get(k, i)}</a>')
+    return ('<aside class="side" id="side"><div class="mt">منوی اصلی</div>' + "".join(out) +
+            '<div style="margin-top:auto;padding:14px 4px 10px;display:flex;align-items:center;justify-content:space-between;color:#9a9aa8;font-size:13px"><b style="letter-spacing:1px;color:#c4b5fd">CAPITAN VPN</b><a href="https://github.com/capitan-bot/panel-seller" target="_blank" rel="noopener" aria-label="GitHub" style="display:flex;width:38px;height:38px;align-items:center;justify-content:center;border-radius:12px;border:1px solid #2a2a40;background:#14141c;color:#e8e8f0"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.38 7.86 10.9.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg></a></div>' +
+            '<form class="lo" method="post" action="/logout"><button>' + ICONS['out'] + ' خروج از پنل</button></form></aside>')
 
 
 def patch_main(h):
