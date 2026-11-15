@@ -42,3 +42,9 @@ venv/
 pycache/
 *.orig
 *.pem
+.env
+data/
+backups/
+venv/
+pycache/
+*.orig
