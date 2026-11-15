@@ -264,3 +264,16 @@ def install(app):
     r.add_get(r"/panels/server/{sid:\d+}", server)
     r.add_get("/settings", settings)
     r.add_post("/settings/act", settings_act)
+
+
+_base_install = install
+
+
+def install(app):
+    _base_install(app)
+    try:
+        from . import stats
+        stats.install(app)
+    except Exception:
+        import traceback
+        traceback.print_exc()
