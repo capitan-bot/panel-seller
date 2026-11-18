@@ -314,3 +314,29 @@ def install(app):
     except Exception:
         import traceback
         traceback.print_exc()
+
+
+_live_prev_install = install
+
+
+def install(app):
+    _live_prev_install(app)
+    try:
+        from . import live
+        live.install(app)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+
+
+_rating_prev_install = install
+
+
+def install(app):
+    _rating_prev_install(app)
+    try:
+        from . import ratings_ui
+        ratings_ui.install(app)
+    except Exception:
+        import traceback
+        traceback.print_exc()

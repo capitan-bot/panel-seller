@@ -4,7 +4,7 @@ import asyncio
 import logging
 import time
 
-from . import admin, btnadm, webadm, kbmenu, usagecard, uiadm, config, db, manage, paneladm, report, stats, user, usersadm, warn
+from . import admin, btnadm, rating, webadm, kbmenu, usagecard, uiadm, config, db, manage, paneladm, report, stats, user, usersadm, warn
 from .panel import get_pg
 from . import monitor
 from . import backup
@@ -51,6 +51,22 @@ async def expiry_loop(bot: Bot) -> None:
         await asyncio.sleep(600)
 
 
+async def watch_ov() -> None:
+    """Reload button overrides when the web panel edits the DB."""
+    import hashlib
+    last = None
+    while True:
+        try:
+            rows = await db.rows("SELECT key,title,emoji_id,style FROM ubtn ORDER BY key")
+            sig = hashlib.md5(repr([tuple(r.values()) if hasattr(r, "values") else tuple(r) for r in rows]).encode()).hexdigest()
+            if last is not None and sig != last:
+                await load_ov()
+            last = sig
+        except Exception:
+            pass
+        await asyncio.sleep(4)
+
+
 async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)   # httpx logs full URLs, which contain the bot token
@@ -65,6 +81,7 @@ async def main() -> None:
     dp.include(stats.router)
     dp.include(paneladm.router)
     dp.include(btnadm.router)
+    dp.include(rating.router)
     dp.include(webadm.router)
     dp.include(kbmenu.router)
     dp.include(usagecard.router)
@@ -78,6 +95,7 @@ async def main() -> None:
     task2 = asyncio.create_task(warn.warn_loop(bot))
     task3 = asyncio.create_task(monitor.monitor_loop(bot))
     task4 = asyncio.create_task(backup.backup_loop(bot))
+    task5 = asyncio.create_task(watch_ov())
     try:
         await dp.poll(bot)
     finally:

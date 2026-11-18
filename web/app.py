@@ -247,12 +247,23 @@ MAIN_HTML = r"""<!doctype html><html lang="fa" dir="rtl"><head><meta charset="ut
 #cus{display:flex;gap:8px;margin-bottom:12px}#cus[hidden]{display:none}#cus input,#cus button{padding:9px;border-radius:10px;border:1px solid var(--bd);background:#0f0f14;color:var(--tx);font-family:inherit}
 .svg{width:100%;height:auto}.svg text{fill:#9a9aa8;font-size:11px;font-family:V,sans-serif}.svg circle{fill:#a78bfa;opacity:.0}.svg circle:hover{opacity:1}.ax{stroke:#2a2a33}
 @media(min-width:960px){.side{transform:none}.main{margin-right:270px;max-width:none}.top{margin-right:270px}.burger{display:none}.ov{display:none!important}}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.side .it{justify-content:flex-start;gap:10px;padding:13px 14px;border:1px solid transparent;position:relative;transition:background .2s,transform .12s,border-color .2s,color .2s}
+.side .it .ic{margin-right:auto;color:var(--mu);transition:color .2s}
+.side a.it:hover{background:#17161f;border-color:var(--bd)}
+.side .it:active{transform:scale(.97)}
+.side .it.act{background:linear-gradient(270deg,#3b2f8f,#241f45);border-color:#4c3fb3;color:#fff;box-shadow:0 0 18px #7c5cff33}
+.side .it.act .ic{color:#c4b5fd}
+.side .it.act:before{content:"";position:absolute;right:-14px;top:22%;bottom:22%;width:3px;border-radius:3px;background:#a78bfa}
+.side .it.soon{opacity:.6;cursor:default}
+.side .it i{font-style:normal;font-size:10px;padding:2px 8px;border-radius:20px;background:#1d1b2b;color:var(--mu)}
+.side .lo{margin-top:auto}
+.side .lo button{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:12px;border:1px solid #5b2a33;background:#2a1418;color:#f87171;font-family:inherit;font-size:15px;cursor:pointer;transition:background .15s,transform .12s}
+.side .lo button:hover{background:#34181d}
+.side .lo button:active{transform:scale(.97)}
+.grp>.gh{width:100%;display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:12px;border:1px solid transparent;background:none;color:var(--tx);font-family:inherit;font-size:15px;cursor:pointer}.grp>.gh:hover{background:#17161f;border-color:var(--bd)}.grp>.gh .ic{margin-right:auto;color:var(--mu)}.grp>.gh .ar{color:var(--mu);font-size:12px;transition:.2s}.grp.open>.gh .ar{transform:rotate(180deg)}.grp>.sb{display:none;flex-direction:column;gap:2px;margin:2px 14px 6px 0;padding-right:12px;border-right:2px solid #2a2a40}.grp.open>.sb{display:flex}.grp>.sb a{padding:10px 12px;border-radius:10px;color:var(--mu);text-decoration:none;font-size:14px}.grp>.sb a:hover{background:#17161f;color:var(--tx)}
 </style></head><body><div class="ov" id="ov"></div>
-<aside class="side" id="side"><div class="mt">منوی اصلی</div><a class="it act">داشبورد <span>▦</span></a>
-<span class="it soon">فروشگاه <i>به‌زودی</i></span><span class="it soon">کاربران <i>به‌زودی</i></span><span class="it soon">گزارش‌ها <i>به‌زودی</i></span>
-<div class="mt">مدیریت</div><span class="it soon">مدیریت پنل‌ها <i>به‌زودی</i></span>
-<div class="mt">پیکربندی</div><span class="it soon">تنظیمات <i>به‌زودی</i></span>
-<form class="lo" method="post" action="/logout"><button>خروج از پنل</button></form></aside>
+<aside class="side" id="side"><div class="mt">منوی اصلی</div><a class="it act">داشبورد <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></a><span class="it soon">فروشگاه <i>به‌زودی</i><svg class="ic" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span><span class="it soon">کاربران <i>به‌زودی</i><svg class="ic" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/></svg></span><span class="it soon">گزارش‌ها <i>به‌زودی</i><svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></span><div class="mt">مدیریت</div><span class="it soon">مدیریت پنل‌ها <i>به‌زودی</i><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div class="mt">پیکربندی</div><span class="it soon">تنظیمات <i>به‌زودی</i><svg class="ic" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span><div class="mt">بات</div><a class="it" href="buttons">دکمه‌های بات</a><form class="lo" method="post" action="/logout"><button><svg class="ic" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg> خروج از پنل</button></form></aside>
 <header class="top"><button class="burger" id="bg">☰</button><b>__TITLE__</b></header>
 <main class="main"><h1>داشبورد</h1><div class="sub" id="date"></div><div class="grid" id="cards"></div>
 <section class="card"><h2>روند درآمد</h2><div class="sub" id="rsum"></div>
@@ -408,7 +419,7 @@ def main():
     print("db:", db_path(), "| admins:", sorted(admin_ids()), "| listen:", f"{HOST}:{PORT}", "| path:", PFX, flush=True)
     if not load_auth():
         print("No password set. Run: python -m web.app setpass", flush=True)
-    from . import pages, server_ui
+    from . import pages, server_ui, btn_ui, more_ui, codes_ui
     MAIN_HTML = pages.patch_main(MAIN_HTML)
     sub = web.Application(middlewares=[guard])
     sub.router.add_get("/", index)
@@ -418,6 +429,9 @@ def main():
     sub.router.add_get("/api/dashboard", api_dash)
     server_ui.install(sub)
     pages.install(sub)
+    btn_ui.install(sub)
+    more_ui.install(sub)
+    codes_ui.install(sub)
     sub.router.add_static("/static/", ASSETS)
 
     async def bare(req):
