@@ -108,7 +108,7 @@ def render(pct, done, current, error=None):
     return "\n".join(lines)
 
 
-async def run_setup(domain, port, email, progress):
+async def run_setup(domain, port, email, progress, skip_dns=False):
     """progress: async function, await progress(text). Returns (ok, message)."""
     conf_name = "pgbot-" + domain
     avail = os.path.join(CONF_DIR, conf_name)
@@ -122,7 +122,7 @@ async def run_setup(domain, port, email, progress):
 
     await progress(render(10, 0, 0))
     ok, ip, got = await check_dns(domain)
-    if not ok:
+    if not ok and not skip_dns:
         return await fail(0, "DNS با IP سرور نمی‌خونه.\nIP سرور: %s\nIP دامنه: %s" % (ip, ", ".join(got) or "پیدا نشد"))
 
     await progress(render(30, 1, 1))
@@ -164,6 +164,8 @@ async def run_setup(domain, port, email, progress):
         try:
             with urllib.request.urlopen("https://" + domain, timeout=10) as r:
                 return r.status
+        except urllib.error.HTTPError as e:
+            return e.code
         except Exception as e:
             return str(e)
 

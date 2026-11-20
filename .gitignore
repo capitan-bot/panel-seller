@@ -68,3 +68,9 @@ backups/
 venv/
 pycache/
 *.orig
+.env
+data/
+backups/
+venv/
+pycache/
+*.orig

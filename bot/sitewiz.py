@@ -24,6 +24,7 @@ CONF_GLOBS = ("/etc/nginx/sites-enabled/*", "/etc/nginx/conf.d/*.conf", "/etc/ap
               "/etc/caddy/Caddyfile", "/etc/caddy/conf.d/*", "/etc/haproxy/haproxy.cfg")
 SKIP = ("example.com", "localhost", "snakeoil")
 PENDING = {}
+SKIP = {}
 LOCK = asyncio.Lock()
 
 
@@ -99,9 +100,6 @@ def _candidates():
 async def verify(d):
     """Returns (ok, reason). Domain must point here and answer like the local site."""
     loop = asyncio.get_running_loop()
-    ok, ip, got = await S.check_dns(d)
-    if not ok:
-        return False, "DNS این دامنه به این سرور اشاره نمی‌کنه. (IP دامنه: %s)" % (", ".join(got) or "پیدا نشد")
     c1, b1 = await loop.run_in_executor(None, _fetch, "http://127.0.0.1:%d/" % SITE_PORT, d)
     if c1 is None:
         return False, "سایت محلی جواب نمی‌ده."
@@ -165,12 +163,13 @@ async def ask_domain(ev):
 async def after_domain(ev, d):
     ok, ip, got = await S.check_dns(d)
     PENDING[ev.from_user.id] = d
+    SKIP.pop(ev.from_user.id, None)
     if not ok:
         text = ("❌ DNS هنوز به این سرور اشاره نمی‌کنه.\n\n"
                 "دامنه: <code>" + h(d) + "</code>\n"
                 "IP فعلی دامنه: <code>" + h(", ".join(got) or "پیدا نشد") + "</code>\n\n"
                 "رکورد A رو درست کن، چند دقیقه صبر کن و «بررسی دوباره» رو بزن.")
-        return await show(ev, text, kb([[btn("🔄 بررسی دوباره", "sw:re")],
+        return await show(ev, text, kb([[btn("🔄 بررسی دوباره", "sw:re")], [btn("⏭ ادامه بدون چک DNS (تانل/پروکسی)", "sw:skip")],
                                         [btn("📍 نمایش IP سرور", "sw:ip")], [btn("🔙 انصراف", "sw:m")]]))
     WAIT[ev.from_user.id] = ("sw_email", None)
     await show(ev, "✅ DNS درسته.\n\nیه ایمیل بفرست (برای ثبت گواهی SSL لازمه):",
@@ -200,6 +199,14 @@ async def swcb(c: Callback):
         return await c.answer(("IP سرور: " + ip) if ip else "IP سرور پیدا نشد.", show_alert=True)
     if d == "sw:go":
         return await ask_domain(c)
+    if d == "sw:skip":
+        if not PENDING.get(uid):
+            return await ask_domain(c)
+        SKIP[uid] = True
+        WAIT[uid] = ("sw_email", None)
+        return await show(c, "⚠️ چک DNS رد شد. گواهی SSL فقط وقتی گرفته می‌شه که پورت 80 دامنه "
+                             "(آی‌پی ایران) به این سرور هدایت بشه.\n\nایمیل رو بفرست:",
+                          kb([[btn("🔙 انصراف", "sw:m")]]))
     if d == "sw:re":
         dom = PENDING.get(uid)
         return await (after_domain(c, dom) if dom else ask_domain(c))
@@ -222,11 +229,33 @@ async def swcb(c: Callback):
         return await show(c, "⚠️ با خاموش‌کردن سایت، <b>پنل ادمین سایت هم</b> از دسترس خارج می‌شه. مطمئنی؟",
                           kb([[btn("✅ بله، خاموش کن", "sw:offy", style="danger")], [btn("🔙 نه", "sw:m")]]))
     if d == "sw:offy":
-        await S._sh("systemctl stop " + SHOP_SERVICE)
+        try:
+            await c.answer("در حال خاموش‌کردن...")
+        except TgError:
+            pass
+        await S._sh("systemctl stop --no-block " + SHOP_SERVICE, 15)
+        for _ in range(10):
+            if not port_up():
+                break
+            await asyncio.sleep(0.5)
+        if port_up():
+            await S._sh("systemctl kill -s KILL " + SHOP_SERVICE, 15)
+            await asyncio.sleep(1)
         return await menu(c, "⏻ سایت خاموش شد.\n\n")
     if d == "sw:on":
-        await S._sh("systemctl start " + SHOP_SERVICE)
-        await asyncio.sleep(2)
+        try:
+            await c.answer("در حال روشن‌کردن...")
+        except TgError:
+            pass
+        code, out = await S._sh("systemctl reset-failed %s; systemctl start --no-block %s" % (SHOP_SERVICE, SHOP_SERVICE), 15)
+        for _ in range(40):
+            if port_up():
+                break
+            await asyncio.sleep(0.5)
+        if not port_up():
+            _, lg = await S._sh("journalctl -u %s -n 8 --no-pager" % SHOP_SERVICE, 15)
+            return await show(c, "❌ سایت روشن نشد.\n<pre>" + h((out + "\n" + lg)[-900:]) + "</pre>",
+                              kb([[btn("🔁 تلاش دوباره", "sw:on")], [btn("🔙 بازگشت", "sw:m")]]))
         return await menu(c, "▶️ سایت روشن شد.\n\n")
     if d == "sw:fg":
         try:
@@ -265,8 +294,7 @@ async def swmsg(m: Message):
     if LOCK.locked():
         return await m.answer("⏳ یه ساخت سایت در حال انجامه.")
     if not port_up():
-        return await m.answer("❌ سرویس سایت روی پورت %d بالا نیست.\nاول این رو بزن:\n"
-                              "<code>systemctl status %s</code>" % (SITE_PORT, SHOP_SERVICE))
+        await S._sh("systemctl start --no-block " + SHOP_SERVICE, 15)
     r = await m.answer(h(S.render(10, 0, 0)))
     mid = r["message_id"] if isinstance(r, dict) else r.message_id
     last = {"t": ""}
@@ -281,14 +309,14 @@ async def swmsg(m: Message):
             pass
 
     async with LOCK:
-        ok, msg = await S.run_setup(d, SITE_PORT, text, progress)
+        ok, msg = await S.run_setup(d, SITE_PORT, text, progress, skip_dns=SKIP.pop(uid, False))
     if ok:
         old = current()
         save(d)
         if old and old != d:
             await S._sh("rm -f /etc/nginx/sites-enabled/pgbot-%s /etc/nginx/sites-available/pgbot-%s "
                         "&& nginx -t && systemctl reload nginx" % (old, old))
-        await m.answer("🎉 سایت آماده شد!\n<code>" + h(msg) + "</code>",
+        await m.answer("🎉 سایت آماده شد!\n<code>" + h(msg) + "</code>" + ("" if port_up() else "\n\n⚠️ سرویس سایت (%s) هنوز بالا نیست؛ تا روشن نشه صفحه خطای 502 می‌ده." % SHOP_SERVICE),
                        kb([[{"text": "🌐 ورود به وب‌سایت", "url": msg}],
                            [{"text": "🛠 ورود به پنل ادمین", "url": msg + "/admin"}],
                            [btn("🔙 مدیریت", "a:home")]]))
