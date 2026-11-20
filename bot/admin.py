@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 
+from . import invoice
 from . import config, db
 from .tg import Callback, Message, Router
 from .panel import PG, PanelError, gen_password, get_pg
@@ -773,7 +774,8 @@ async def acb(c: Callback):
         else:
             msg, note = "❌ رسید شارژ تو رد شد. اگر اشتباه است به پشتیبانی پیام بده.", "❌ رد شد"
         try:
-            await c.bot.send_message(r["user_id"], msg)
+            await invoice.settle(c.bot, rid, p[2] == "ok", r)
+            await c.bot.send_message(r["user_id"], msg, effect="5046509860389126442" if p[2] == "ok" else None)
         except Exception:
             log.warning("cannot notify user %s", r["user_id"])
         try:

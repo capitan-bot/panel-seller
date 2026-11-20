@@ -5,6 +5,7 @@ import logging
 import time
 
 from . import admin, btnadm, rating, webadm, kbmenu, usagecard, uiadm, config, db, manage, paneladm, report, stats, user, usersadm, warn
+from . import invoice
 from .panel import get_pg
 from . import monitor
 from . import backup
@@ -77,6 +78,7 @@ async def main() -> None:
     bot = Bot(config.BOT_TOKEN)
     report.init(bot)
     dp = Dispatcher(gate)
+    dp.include(invoice.router)
     dp.include(admin.router)
     dp.include(stats.router)
     dp.include(paneladm.router)

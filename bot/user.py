@@ -5,8 +5,10 @@ import re
 import time
 
 from . import config, db, report
+from .progress import Progress
 from .tg import Callback, Message, Router
 from .panel import PanelError, PanelTaken, gen_password, gen_username, get_pg
+from . import invoice
 from .ui import (WAIT, xbtn, btn, chunk, fdate, fgb, fmt, h, kb, main_menu, notify_admins, num, panel_label, panel_text,
                  show, waiting)
 
@@ -93,7 +95,7 @@ async def deliver(c, name: str, pw: str, gb: float, base: str) -> None:
         rows.append([btn("⚙️ مدیریت سرویس", f"u:p:{x['id']}", style="primary")])
     rows.append([btn("🏠 منوی اصلی", "u:home")])
     await show(c, "🎉 ممنون از خرید شما!\nسرویس شما با موفقیت ساخته شد؛ اطلاعات پنل در پیام بعدی است.", None)
-    await c.message.answer(creds_text(name, pw, gb, base), kb(rows))
+    await c.message.answer(creds_text(name, pw, gb, base), kb(rows), effect="5046509860389126442")  # 🎉
 
 
 async def extend_panel(p, days: int) -> None:
@@ -306,7 +308,8 @@ async def ucb(c: Callback):
             await c.answer("این کد تخفیف دیگر معتبر نیست؛ قیمت به حالت عادی برگشت.", show_alert=True)
             return await confirm(c, uid)
         try:
-            name, pw, base = await new_panel(uid, st["pid"], st["gb"], False, st["user"], st["pw"])
+            async with Progress(c.message):
+                name, pw, base = await new_panel(uid, st["pid"], st["gb"], False, st["user"], st["pw"])
         except Exception as e:
             await db.credit(uid, st["price"])
             await db.code_release(st.get("code_id"), uid)
@@ -346,7 +349,8 @@ async def ucb(c: Callback):
         if n != 1:
             return await c.answer("قبلاً از تست استفاده کرده‌ای.", show_alert=True)
         try:
-            name, pw, base = await new_panel(uid, None, gb, True)
+            async with Progress(c.message, "در حال ساخت پنل تست"):
+                name, pw, base = await new_panel(uid, None, gb, True)
         except Exception as e:
             await db.run("UPDATE users SET test_used=0 WHERE tg_id=?", uid)
             log.exception("test failed")
@@ -399,8 +403,7 @@ async def uwait(m: Message):
             WAIT.pop(uid, None)
             return await m.answer("شماره کارت هنوز توسط مدیر ثبت نشده است.")
         WAIT[uid] = ("u_receipt", amount)
-        return await m.answer(f"💳 مبلغ <b>{fmt(amount)}</b> تومان را به کارت زیر واریز کن:\n\n<code>{h(card)}</code>\n"
-                              f"{h(holder)}\n\nبعد از واریز، <b>عکس رسید</b> را همین‌جا بفرست.")
+        return await invoice.start(m, uid, amount, card, holder)
 
     if kind == "u_receipt":
         if not m.photo:
@@ -409,6 +412,7 @@ async def uwait(m: Message):
         rid, _ = await db.run("INSERT INTO receipts(user_id,amount,file_id,created) VALUES(?,?,?,?)",
                               uid, arg, file_id, int(time.time()))
         WAIT.pop(uid, None)
+        await invoice.on_receipt(m.bot, uid, rid)
         markup = kb([[btn("✅ تایید", f"a:rc:ok:{rid}", style="success"), btn("❌ رد", f"a:rc:no:{rid}", style="danger")]])
         for a in sorted(config.ADMIN_IDS | config.OPERATOR_IDS):
             try:

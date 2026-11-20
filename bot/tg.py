@@ -48,9 +48,19 @@ class Bot:
             raise TgError(j.get("description", "error"), j.get("error_code", 0))
         return j["result"]
 
-    async def send_message(self, chat_id: int, text: str, reply_markup=None):
-        return await self.api("sendMessage", chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=reply_markup,
-                              link_preview_options={"is_disabled": True})
+    async def send_message(self, chat_id: int, text: str, reply_markup=None, effect: str | None = None):
+        kw = dict(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=reply_markup,
+                  link_preview_options={"is_disabled": True})
+        if effect:
+            try:
+                return await self.api("sendMessage", message_effect_id=effect, **kw)
+            except TgError as e:
+                log.warning("effect failed, sending plain: %s", e)
+        return await self.api("sendMessage", **kw)
+
+    async def edit_message(self, chat_id: int, message_id: int, text: str, reply_markup=None):
+        return await self.api("editMessageText", chat_id=chat_id, message_id=message_id, text=text, parse_mode="HTML",
+                              reply_markup=reply_markup or EMPTY_KB, link_preview_options={"is_disabled": True})
 
     async def send_photo(self, chat_id: int, photo: str, caption: str | None = None, reply_markup=None):
         return await self.api("sendPhoto", chat_id=chat_id, photo=photo, caption=caption, parse_mode="HTML",
@@ -91,8 +101,8 @@ class Message:
         self.photo = d.get("photo") or []
         self.entities = d.get("entities") or []
 
-    async def answer(self, text: str, reply_markup=None):
-        return await self.bot.send_message(self.chat_id, text, reply_markup)
+    async def answer(self, text: str, reply_markup=None, effect: str | None = None):
+        return await self.bot.send_message(self.chat_id, text, reply_markup, effect)
 
     async def edit_text(self, text: str, reply_markup=None):
         return await self.bot.api("editMessageText", chat_id=self.chat_id, message_id=self.message_id, text=text,
