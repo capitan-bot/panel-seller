@@ -28,6 +28,37 @@ SKIP = {}
 LOCK = asyncio.Lock()
 
 
+import sys
+
+UNIT_PATH = "/etc/systemd/system/" + SHOP_SERVICE + ".service"
+UNIT = """[Unit]
+Description=PG Bot shop site
+After=network-online.target
+
+[Service]
+WorkingDirectory=%s
+ExecStart=%s -m shop.main
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+
+async def ensure_service():
+    """Creates the shop systemd unit if missing. Returns an error text or empty string."""
+    if os.path.exists(UNIT_PATH):
+        return ""
+    app = os.getcwd()
+    if not os.path.isdir(os.path.join(app, "shop")):
+        return "پوشه‌ی shop پیدا نشد. اول از منوی pgbot گزینه‌ی 3 (Update) رو بزن."
+    with open(UNIT_PATH, "w", encoding="utf-8") as f:
+        f.write(UNIT % (app, sys.executable))
+    await S._sh("systemctl daemon-reload && systemctl enable " + SHOP_SERVICE, 30)
+    return ""
+
+
 def current():
     try:
         return open(DOM_FILE, encoding="utf-8").read().strip()
@@ -247,6 +278,9 @@ async def swcb(c: Callback):
             await c.answer("در حال روشن‌کردن...")
         except TgError:
             pass
+        err = await ensure_service()
+        if err:
+            return await show(c, "❌ " + h(err), kb([[btn("🔙 بازگشت", "sw:m")]]))
         code, out = await S._sh("systemctl reset-failed %s; systemctl start --no-block %s" % (SHOP_SERVICE, SHOP_SERVICE), 15)
         for _ in range(40):
             if port_up():
@@ -294,6 +328,7 @@ async def swmsg(m: Message):
     if LOCK.locked():
         return await m.answer("⏳ یه ساخت سایت در حال انجامه.")
     if not port_up():
+        await ensure_service()
         await S._sh("systemctl start --no-block " + SHOP_SERVICE, 15)
     r = await m.answer(h(S.render(10, 0, 0)))
     mid = r["message_id"] if isinstance(r, dict) else r.message_id
