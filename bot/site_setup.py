@@ -160,7 +160,8 @@ async def run_setup(domain, port, email, progress, skip_dns=False):
     if code:
         return await fail(3, out)
     code, out = await _sh(
-        "certbot --nginx -d %s -m %s --agree-tos --non-interactive --redirect" % (domain, email), 240)
+        "certbot --nginx -d %s %s --agree-tos --non-interactive --redirect" % (
+            domain, ("-m " + email) if email else "--register-unsafely-without-email"), 240)
     if code:
         return await fail(3, out)
 

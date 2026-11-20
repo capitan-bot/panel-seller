@@ -38,8 +38,8 @@ async def main():
             return
 
     while True:
-        email = ask("Email for SSL certificate: ")
-        if EMAIL_RE.match(email):
+        email = ask("Email for SSL (optional, Enter to skip): ")
+        if not email or EMAIL_RE.match(email):
             break
         print("Invalid email.")
 

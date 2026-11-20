@@ -53,6 +53,7 @@ async def ensure_service():
     app = os.getcwd()
     if not os.path.isdir(os.path.join(app, "shop")):
         return "پوشه‌ی shop پیدا نشد. اول از منوی pgbot گزینه‌ی 3 (Update) رو بزن."
+    await S._sh("%s -m pip install -q aiohttp pillow arabic-reshaper python-bidi" % sys.executable, 300)
     with open(UNIT_PATH, "w", encoding="utf-8") as f:
         f.write(UNIT % (app, sys.executable))
     await S._sh("systemctl daemon-reload && systemctl enable " + SHOP_SERVICE, 30)
@@ -202,9 +203,7 @@ async def after_domain(ev, d):
                 "رکورد A رو درست کن، چند دقیقه صبر کن و «بررسی دوباره» رو بزن.")
         return await show(ev, text, kb([[btn("🔄 بررسی دوباره", "sw:re")], [btn("⏭ ادامه بدون چک DNS (تانل/پروکسی)", "sw:skip")],
                                         [btn("📍 نمایش IP سرور", "sw:ip")], [btn("🔙 انصراف", "sw:m")]]))
-    WAIT[ev.from_user.id] = ("sw_email", None)
-    await show(ev, "✅ DNS درسته.\n\nیه ایمیل بفرست (برای ثبت گواهی SSL لازمه):",
-               kb([[btn("🔙 انصراف", "sw:m")]]))
+    await build(ev, d)
 
 
 async def check_one(ev, d):
@@ -234,10 +233,7 @@ async def swcb(c: Callback):
         if not PENDING.get(uid):
             return await ask_domain(c)
         SKIP[uid] = True
-        WAIT[uid] = ("sw_email", None)
-        return await show(c, "⚠️ چک DNS رد شد. گواهی SSL فقط وقتی گرفته می‌شه که پورت 80 دامنه "
-                             "(آی‌پی ایران) به این سرور هدایت بشه.\n\nایمیل رو بفرست:",
-                          kb([[btn("🔙 انصراف", "sw:m")]]))
+        return await build(c, PENDING[uid])
     if d == "sw:re":
         dom = PENDING.get(uid)
         return await (after_domain(c, dom) if dom else ask_domain(c))
@@ -319,16 +315,20 @@ async def swmsg(m: Message):
             return await check_one(m, d)
         return await after_domain(m, d)
 
-    if not EMAIL_RE.match(text):
-        return await m.answer("ایمیل معتبر نیست؛ دوباره بفرست.")
-    d = PENDING.get(uid)
     WAIT.pop(uid, None)
-    if not d:
-        return await ask_domain(m)
+
+
+async def build(ev, d):
+    uid = ev.from_user.id
+    m = getattr(ev, "message", None) or ev
+    skip = SKIP.pop(uid, False)
+    WAIT.pop(uid, None)
     if LOCK.locked():
         return await m.answer("⏳ یه ساخت سایت در حال انجامه.")
+    err = await ensure_service()
+    if err:
+        return await m.answer("❌ " + h(err))
     if not port_up():
-        await ensure_service()
         await S._sh("systemctl start --no-block " + SHOP_SERVICE, 15)
     r = await m.answer(h(S.render(10, 0, 0)))
     mid = r["message_id"] if isinstance(r, dict) else r.message_id
@@ -344,14 +344,15 @@ async def swmsg(m: Message):
             pass
 
     async with LOCK:
-        ok, msg = await S.run_setup(d, SITE_PORT, text, progress, skip_dns=SKIP.pop(uid, False))
+        ok, msg = await S.run_setup(d, SITE_PORT, "", progress, skip_dns=skip)
     if ok:
         old = current()
         save(d)
         if old and old != d:
             await S._sh("rm -f /etc/nginx/sites-enabled/pgbot-%s /etc/nginx/sites-available/pgbot-%s "
                         "&& nginx -t && systemctl reload nginx" % (old, old))
-        await m.answer("🎉 سایت آماده شد!\n<code>" + h(msg) + "</code>" + ("" if port_up() else "\n\n⚠️ سرویس سایت (%s) هنوز بالا نیست؛ تا روشن نشه صفحه خطای 502 می‌ده." % SHOP_SERVICE),
+        warn = "" if port_up() else "\n\n⚠️ سرویس سایت هنوز بالا نیست؛ چند ثانیه بعد صفحه رو تازه کن."
+        await m.answer("🎉 سایت آماده شد!\n<code>" + h(msg) + "</code>" + warn,
                        kb([[{"text": "🌐 ورود به وب‌سایت", "url": msg}],
                            [{"text": "🛠 ورود به پنل ادمین", "url": msg + "/admin"}],
                            [btn("🔙 مدیریت", "a:home")]]))
