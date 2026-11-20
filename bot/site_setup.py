@@ -126,6 +126,9 @@ async def run_setup(domain, port, email, progress, skip_dns=False):
         return await fail(0, "DNS با IP سرور نمی‌خونه.\nIP سرور: %s\nIP دامنه: %s" % (ip, ", ".join(got) or "پیدا نشد"))
 
     await progress(render(30, 1, 1))
+
+    if (await _sh("fuser /var/lib/dpkg/lock-frontend"))[0] == 0:
+        await progress(render(30, 1, 1) + "\n\n⏳ سیستم در حال آپدیت خودکاره؛ تا چند دقیقه صبر می‌کنم...")
     if not shutil.which("nginx"):
         busy = await _sh("ss -ltn | grep -E ':80 |:443 '")
         if busy[1]:
@@ -150,6 +153,9 @@ async def run_setup(domain, port, email, progress, skip_dns=False):
         return await fail(2, out, rollback=True)
 
     await progress(render(70, 3, 3))
+
+    if (await _sh("fuser /var/lib/dpkg/lock-frontend"))[0] == 0:
+        await progress(render(70, 3, 3) + "\n\n⏳ سیستم در حال آپدیت خودکاره؛ تا چند دقیقه صبر می‌کنم...")
     code, out = await _sh("DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-nginx", 400)
     if code:
         return await fail(3, out)
