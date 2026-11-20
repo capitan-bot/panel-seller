@@ -471,6 +471,7 @@ async def home(ev):
         [btn("🗂 فروخته‌شده", "a:sold"), btn("📦 محصولات", "a:prs")],
         [btn("🛠 مدیریت تغییرات ظاهری", "ux:m"), btn("🛰 اتصال پنل", "a:panel")],
         [btn("📢 پیام همگانی", "a:bc"), btn("⚙️ تنظیمات", "a:set")],
+        [btn("🌐 ساخت وب‌سایت", "sw:m", style="success")],
     ]
     codes_btn = btn("🎟 کد تخفیف/هدیه", "a:cd", style="success")
     if ev.from_user.id in config.OWNER_IDS:

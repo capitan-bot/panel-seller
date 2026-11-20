@@ -15,6 +15,7 @@ def main():
     from . import skin
     from . import landing
     from . import unify
+    from . import admin
     app = web.Application(middlewares=[auth.guard])
     app.on_startup.append(buy.startup)
     auth.install(app)

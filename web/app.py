@@ -432,6 +432,12 @@ def main():
     btn_ui.install(sub)
     more_ui.install(sub)
     codes_ui.install(sub)
+    try:
+        from . import plugins
+        plugins.install(sub)
+    except Exception:
+        import traceback
+        traceback.print_exc()
     sub.router.add_static("/static/", ASSETS)
 
     async def bare(req):
