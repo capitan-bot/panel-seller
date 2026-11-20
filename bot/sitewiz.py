@@ -359,3 +359,27 @@ async def build(ev, d):
     else:
         await m.answer("❌ ساخت سایت کامل نشد. تغییرات برگردونده شد.",
                        kb([[btn("🔁 تلاش دوباره", "sw:go")], [btn("🔙 مدیریت", "a:home")]]))
+
+
+DROPIN = "/etc/systemd/system/" + SHOP_SERVICE + ".service.d/fast.conf"
+_orig_ensure = ensure_service
+
+
+def _fast_stop_dropin():
+    try:
+        if os.path.exists(UNIT_PATH) and not os.path.exists(DROPIN):
+            os.makedirs(os.path.dirname(DROPIN), exist_ok=True)
+            with open(DROPIN, "w", encoding="utf-8") as f:
+                f.write("[Service]\nTimeoutStopSec=5\nKillMode=mixed\n")
+            os.system("systemctl daemon-reload")
+    except OSError:
+        pass
+
+
+async def ensure_service():
+    err = await _orig_ensure()
+    _fast_stop_dropin()
+    return err
+
+
+_fast_stop_dropin()
