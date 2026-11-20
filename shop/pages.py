@@ -50,9 +50,9 @@ async def home(req):
 
 async def panels(req):
     rows = await asyncio.to_thread(
-        A.q, "SELECT admin_username,expires,status,created FROM panels WHERE user_id=? AND is_test=0 ORDER BY id DESC", (req["uid"],))
+        A.q, "SELECT admin_username,expires,status,created,id FROM panels WHERE user_id=? AND is_test=0 ORDER BY id DESC", (req["uid"],))
     now, cards = int(time.time()), ""
-    for name, exp, st, created in rows:
+    for name, exp, st, created, pid in rows:
         ok = st == "active" and (not exp or exp > now)
         days = max(0, (exp - now) // 86400) if exp else 0
         if not exp:
@@ -67,8 +67,8 @@ async def panels(req):
                   '<circle class="p" cx="22" cy="22" r="18" stroke="%s" style="stroke-dasharray:%s 113.1"/></svg>'
                   '<div class="rc"><b>%s</b><small>روز</small></div></div><div class="pf"><div class="pu" dir="ltr">%s</div>'
                   '<span class="st %s">%s</span>%s<div class="mu">ساخت: <span class="tm" data-t="%d"></span></div>'
-                  '<button class="cp" data-c="%s">📋 کپی نام کاربری</button></div></div>'
-                  % (col, ln, mid, esc(name), "ok" if ok else "no", esc(LBL.get(st, st)), tail, created or 0, esc(name)))
+                  '<button class="cp" data-c="%s">📋 کپی نام کاربری</button> <a class="cta" href="/panels/%d">⚙️ مدیریت</a></div></div>'
+                  % (col, ln, mid, esc(name), "ok" if ok else "no", esc(LBL.get(st, st)), tail, created or 0, esc(name), pid))
     body = '<div class="grid">%s</div>' % cards if cards else '<div class="card">هنوز پنلی نداری.</div>'
     return shell("پنل‌های من", body, "panels", sub="%s پنل" % fa(len(rows)))
 

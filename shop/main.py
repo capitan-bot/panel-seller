@@ -6,7 +6,7 @@ from aiohttp import web
 
 from web import app as A
 
-from . import auth, buy, pages, wallet
+from . import auth, buy, manage, pages, wallet
 
 
 def main():
@@ -21,6 +21,7 @@ def main():
     pages.install(app)
     buy.install(app)
     wallet.install(app)
+    manage.install(app)
     app.router.add_static("/static/", A.ASSETS)
     port = int(os.environ.get("SHOP_PORT", "8788"))
     print("shop listening on 127.0.0.1:%d" % port, flush=True)
