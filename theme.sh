@@ -43,6 +43,7 @@ header() {
   item 7 "🔑" "Change bot token"
   item 8 "🆔" "Change admin IDs"
   item 9 "🌐" "Web panel setup"
+  item 10 "🌐" "Install website"
   echo
   hr
   item 0 "🚪" "Exit"

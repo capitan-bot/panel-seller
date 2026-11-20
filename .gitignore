@@ -62,3 +62,9 @@ pycache/
 *.orig
 web.backup.*/
 *.bak*
+.env
+data/
+backups/
+venv/
+pycache/
+*.orig

@@ -1,7 +1,10 @@
 import asyncio
+import glob
 import os
 import re
 import socket
+import urllib.error
+import urllib.request
 
 from . import config
 from . import site_setup as S
@@ -11,9 +14,15 @@ from .ui import WAIT, btn, h, kb, show
 router = Router(guard=lambda ev: ev.from_user.id in config.ADMIN_IDS)
 
 SITE_PORT = 8788
+SHOP_SERVICE = "pgbot-shop"
 DATA_DIR = os.environ.get("PGBOT_DATA", os.path.join(os.getcwd(), "data"))
 DOM_FILE = os.path.join(DATA_DIR, "site_domain.txt")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", re.I)
+DOM_RE = re.compile(r"[a-z0-9][a-z0-9.-]*\.[a-z]{2,}", re.I)
+TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
+CONF_GLOBS = ("/etc/nginx/sites-enabled/*", "/etc/nginx/conf.d/*.conf", "/etc/apache2/sites-enabled/*",
+              "/etc/caddy/Caddyfile", "/etc/caddy/conf.d/*", "/etc/haproxy/haproxy.cfg")
+SKIP = ("example.com", "localhost", "snakeoil")
 PENDING = {}
 LOCK = asyncio.Lock()
 
@@ -23,6 +32,11 @@ def current():
         return open(DOM_FILE, encoding="utf-8").read().strip()
     except OSError:
         return ""
+
+
+def save(d):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    open(DOM_FILE, "w", encoding="utf-8").write(d)
 
 
 def port_up():
@@ -37,20 +51,12 @@ def port_up():
         s.close()
 
 
-import glob
-import ssl
-import urllib.error
-import urllib.request
-
-DOM_RE = re.compile(r"[a-z0-9][a-z0-9.-]*\.[a-z]{2,}", re.I)
-TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
-CONF_GLOBS = ("/etc/nginx/sites-enabled/*", "/etc/nginx/conf.d/*.conf", "/etc/apache2/sites-enabled/*",
-              "/etc/caddy/Caddyfile", "/etc/caddy/conf.d/*")
-
-
-def _fetch(url):
+def _fetch(url, host=None):
+    req = urllib.request.Request(url, headers={"User-Agent": "pgbot-check"})
+    if host:
+        req.add_header("Host", host)
     try:
-        with urllib.request.urlopen(url, timeout=8) as r:
+        with urllib.request.urlopen(req, timeout=8) as r:
             return r.status, r.read(200000).decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         try:
@@ -74,40 +80,48 @@ def _candidates():
                 t = open(p, errors="replace").read()
             except OSError:
                 continue
-            if str(SITE_PORT) not in t:
-                continue
             for line in t.splitlines():
                 l = line.strip()
-                if re.match(r"(server_name|ServerName|ServerAlias)\s", l):
-                    found.update(d.lower() for d in DOM_RE.findall(l.split(None, 1)[1]))
-                elif l.endswith("{") and "/" not in l:
+                if l.startswith("#"):
+                    continue
+                if re.match(r"(server_name|ServerName|ServerAlias|acl|use_backend|host)\b", l, re.I) or \
+                        (l.endswith("{") and "/" not in l):
                     found.update(d.lower() for d in DOM_RE.findall(l))
     try:
         for n in os.listdir("/etc/letsencrypt/live"):
             found.add(n.lower())
     except OSError:
         pass
-    return sorted(d for d in found if S.clean_domain(d))
+    out = [d for d in sorted(found) if S.clean_domain(d) and not any(x in d for x in SKIP)]
+    return out[:30]
+
+
+async def verify(d):
+    """Returns (ok, reason). Domain must point here and answer like the local site."""
+    loop = asyncio.get_running_loop()
+    ok, ip, got = await S.check_dns(d)
+    if not ok:
+        return False, "DNS این دامنه به این سرور اشاره نمی‌کنه. (IP دامنه: %s)" % (", ".join(got) or "پیدا نشد")
+    c1, b1 = await loop.run_in_executor(None, _fetch, "http://127.0.0.1:%d/" % SITE_PORT, d)
+    if c1 is None:
+        return False, "سایت محلی جواب نمی‌ده."
+    c2, b2 = await loop.run_in_executor(None, _fetch, "https://" + d + "/")
+    if c2 is None:
+        return False, "https://%s جواب نمی‌ده." % d
+    if c1 == c2 and _title(b1) == _title(b2):
+        return True, ""
+    return False, "این دامنه به سایت دیگه‌ای اشاره می‌کنه، نه سایت این ربات."
 
 
 async def find_site():
-    loop = asyncio.get_running_loop()
     if not port_up():
         return None, "سرویس سایت روی پورت %d بالا نیست." % SITE_PORT
-    code, body = await loop.run_in_executor(None, _fetch, "http://127.0.0.1:%d/" % SITE_PORT)
-    if code is None:
-        return None, "جواب سایت محلی گرفته نشد."
-    mine = (code, _title(body))
+    loop = asyncio.get_running_loop()
     cands = await loop.run_in_executor(None, _candidates)
     hits = []
     for d in cands:
-        ok, ip, got = await S.check_dns(d)
-        if not ok:
-            continue
-        c2, b2 = await loop.run_in_executor(None, _fetch, "https://" + d + "/")
-        if c2 is None:
-            continue
-        if c2 == mine[0] and _title(b2) == mine[1]:
+        ok, _ = await verify(d)
+        if ok:
             hits.append(d)
     return hits, "%d دامنه بررسی شد." % len(cands)
 
@@ -115,32 +129,37 @@ async def find_site():
 async def menu(ev, note=""):
     cur = current()
     if cur:
-        text = note + "🌐 <b>وب‌سایت</b>\n\n✅ سایت فعال:\n<code>" + h("https://" + cur) + "</code>"
-        rows = [[{"text": "🌐 باز کردن سایت", "url": "https://" + cur}],
-                [btn("🔄 تغییر دامنه", "sw:go")]]
+        up = port_up()
+        text = (note + "🌐 <b>وب‌سایت</b>\n\n" + ("🟢 روشن" if up else "🔴 خاموش") + "\n"
+                "🔗 سایت: <code>" + h("https://" + cur) + "</code>\n"
+                "🛠 پنل ادمین: <code>" + h("https://" + cur + "/admin") + "</code>")
+        toggle = btn("⏻ خاموش کردن وب‌سایت", "sw:off") if up else btn("▶️ روشن کردن وب‌سایت", "sw:on", style="success")
+        rows = [[{"text": "🌐 ورود به وب‌سایت", "url": "https://" + cur}],
+                [{"text": "🛠 ورود به پنل ادمین", "url": "https://" + cur + "/admin"}],
+                [btn("🔄 تغییر دامنه", "sw:go"), btn("🔍 بررسی دوباره", "sw:find")],
+                [toggle],
+                [btn("🗑 حذف ثبت دامنه", "sw:fg")]]
     else:
-        text = (note + "🌐 <b>ساخت وب‌سایت</b>\n\n"
-                "با چند مرحله برای فروشگاهت سایت می‌سازم و گواهی SSL هم می‌گیرم.\n"
-                "فقط یه دامنه لازم داری.")
+        text = (note + "🌐 <b>وب‌سایت</b>\n\nهنوز دامنه‌ای برای سایت ثبت نشده.\n"
+                "یا سایت جدید بساز، یا اگه قبلاً دستی نصب کردی پیداش کن.")
         rows = [[btn("🚀 ساخت وب‌سایت", "sw:go", style="success")],
-                [btn("🔍 پیدا کردن سایتِ نصب‌شده", "sw:find")]]
+                [btn("🔍 پیدا کردن خودکار", "sw:find"), btn("🔎 بررسی یه دامنه", "sw:chk")]]
     rows.append([btn("🔙 مدیریت", "a:home")])
     await show(ev, text, kb(rows))
 
 
 async def ask_domain(ev):
-    ip = await S.server_ip() or "(نامشخص)"
     WAIT[ev.from_user.id] = ("sw_domain", None)
     text = ("📘 <b>راهنمای DNS</b>\n\n"
             "۱) وارد پنل دامنه‌ات (یا کلودفلر) شو.\n"
             "۲) یه رکورد بساز:\n"
             "• نوع: <code>A</code>\n"
             "• نام: <code>@</code> (یا اسم ساب‌دامنه مثل <code>store</code>)\n"
-            "• مقدار: <code>" + h(ip) + "</code>\n"
+            "• مقدار: آی‌پی عمومی همین سرور (دکمه‌ی «نمایش IP سرور»)\n"
             "۳) اگه کلودفلر داری، ابر نارنجی (Proxy) رو <b>خاموش</b> کن تا خاکستری بشه.\n"
             "۴) چند دقیقه صبر کن تا DNS پخش بشه.\n\n"
             "حالا دامنه‌ات رو بفرست، مثلاً <code>store.example.com</code>")
-    await show(ev, text, kb([[btn("🔙 انصراف", "sw:m")]]))
+    await show(ev, text, kb([[btn("📍 نمایش IP سرور", "sw:ip")], [btn("🔙 انصراف", "sw:m")]]))
 
 
 async def after_domain(ev, d):
@@ -149,13 +168,21 @@ async def after_domain(ev, d):
     if not ok:
         text = ("❌ DNS هنوز به این سرور اشاره نمی‌کنه.\n\n"
                 "دامنه: <code>" + h(d) + "</code>\n"
-                "IP سرور: <code>" + h(str(ip)) + "</code>\n"
                 "IP فعلی دامنه: <code>" + h(", ".join(got) or "پیدا نشد") + "</code>\n\n"
                 "رکورد A رو درست کن، چند دقیقه صبر کن و «بررسی دوباره» رو بزن.")
-        return await show(ev, text, kb([[btn("🔄 بررسی دوباره", "sw:re")], [btn("🔙 انصراف", "sw:m")]]))
+        return await show(ev, text, kb([[btn("🔄 بررسی دوباره", "sw:re")],
+                                        [btn("📍 نمایش IP سرور", "sw:ip")], [btn("🔙 انصراف", "sw:m")]]))
     WAIT[ev.from_user.id] = ("sw_email", None)
-    await show(ev, "✅ DNS درسته.\n\nیه ایمیل بفرست (برای ثبت گواهی SSL لازمه، مثلاً هشدار تمدید به همین می‌رسه):",
+    await show(ev, "✅ DNS درسته.\n\nیه ایمیل بفرست (برای ثبت گواهی SSL لازمه):",
                kb([[btn("🔙 انصراف", "sw:m")]]))
+
+
+async def check_one(ev, d):
+    ok, why = await verify(d)
+    if ok:
+        save(d)
+        return await menu(ev, "✅ سایت پیدا و ثبت شد.\n\n")
+    await show(ev, "❌ " + h(why), kb([[btn("🔎 دامنه‌ی دیگه", "sw:chk")], [btn("🔙 بازگشت", "sw:m")]]))
 
 
 @router.command("site")
@@ -167,30 +194,52 @@ async def site_cmd(m: Message):
 @router.callback("sw:")
 async def swcb(c: Callback):
     uid = c.from_user.id
-    if c.data == "sw:go":
+    d = c.data
+    if d == "sw:ip":
+        ip = await S.server_ip()
+        return await c.answer(("IP سرور: " + ip) if ip else "IP سرور پیدا نشد.", show_alert=True)
+    if d == "sw:go":
         return await ask_domain(c)
-    if c.data == "sw:find":
-        await show(c, "🔍 در حال جستجوی سایت روی سرور...", kb([]))
+    if d == "sw:re":
+        dom = PENDING.get(uid)
+        return await (after_domain(c, dom) if dom else ask_domain(c))
+    if d == "sw:chk":
+        WAIT[uid] = ("sw_check", None)
+        return await show(c, "🔎 دامنه‌ی سایتت رو بفرست (مثلاً <code>store.example.com</code>) تا چک کنم "
+                             "روی همین سرور و برای همین ربات باشه.", kb([[btn("🔙 انصراف", "sw:m")]]))
+    if d == "sw:find":
+        await show(c, "🔍 در حال جستجو و بررسی دامنه‌ها... (ممکنه یه دقیقه طول بکشه)", kb([]))
         hits, note = await find_site()
         if not hits:
-            msg = note if hits is None else "❌ سایتی پیدا نشد. (" + note + ")\nاگه دستی نصب کردی، دامنه‌ش رو با «ساخت وب‌سایت» ثبت کن."
-            return await show(c, msg, kb([[btn("🚀 ساخت وب‌سایت", "sw:go", style="success")],
-                                           [btn("🔙 بازگشت", "sw:m")]]))
-        os.makedirs(DATA_DIR, exist_ok=True)
-        open(DOM_FILE, "w", encoding="utf-8").write(hits[0])
-        extra = ("\nدامنه‌های دیگه: " + ", ".join(hits[1:])) if len(hits) > 1 else ""
-        return await menu(c, "✅ سایت پیدا و ثبت شد.\n\n" + h(extra) + ("\n\n" if extra else ""))
-    if c.data == "sw:re":
-        d = PENDING.get(uid)
-        if not d:
-            return await ask_domain(c)
-        return await after_domain(c, d)
+            msg = h(note) if hits is None else "❌ سایتی پیدا نشد. (" + h(note) + ")\nدامنه رو دستی چک کن."
+            return await show(c, msg, kb([[btn("🔎 بررسی یه دامنه", "sw:chk")],
+                                          [btn("🚀 ساخت وب‌سایت", "sw:go", style="success")],
+                                          [btn("🔙 بازگشت", "sw:m")]]))
+        save(hits[0])
+        extra = ("دامنه‌های دیگه: " + ", ".join(hits[1:]) + "\n\n") if len(hits) > 1 else ""
+        return await menu(c, "✅ سایت پیدا و ثبت شد.\n" + h(extra) + "\n")
+    if d == "sw:off":
+        return await show(c, "⚠️ با خاموش‌کردن سایت، <b>پنل ادمین سایت هم</b> از دسترس خارج می‌شه. مطمئنی؟",
+                          kb([[btn("✅ بله، خاموش کن", "sw:offy", style="danger")], [btn("🔙 نه", "sw:m")]]))
+    if d == "sw:offy":
+        await S._sh("systemctl stop " + SHOP_SERVICE)
+        return await menu(c, "⏻ سایت خاموش شد.\n\n")
+    if d == "sw:on":
+        await S._sh("systemctl start " + SHOP_SERVICE)
+        await asyncio.sleep(2)
+        return await menu(c, "▶️ سایت روشن شد.\n\n")
+    if d == "sw:fg":
+        try:
+            os.remove(DOM_FILE)
+        except OSError:
+            pass
+        return await menu(c, "🗑 ثبت دامنه حذف شد (خود سایت دست‌نخورده است).\n\n")
     WAIT.pop(uid, None)
     await menu(c)
 
 
 def _pred(m):
-    return bool(m.from_user) and WAIT.get(m.from_user.id, ("",))[0] in ("sw_domain", "sw_email")
+    return bool(m.from_user) and WAIT.get(m.from_user.id, ("",))[0] in ("sw_domain", "sw_email", "sw_check")
 
 
 @router.message(_pred)
@@ -198,10 +247,13 @@ async def swmsg(m: Message):
     uid = m.from_user.id
     kind = WAIT[uid][0]
     text = (m.text or "").strip()
-    if kind == "sw_domain":
+    if kind in ("sw_domain", "sw_check"):
         d = S.clean_domain(text)
         if not d:
             return await m.answer("دامنه معتبر نیست. مثال: <code>store.example.com</code>")
+        WAIT.pop(uid, None)
+        if kind == "sw_check":
+            return await check_one(m, d)
         return await after_domain(m, d)
 
     if not EMAIL_RE.match(text):
@@ -214,7 +266,7 @@ async def swmsg(m: Message):
         return await m.answer("⏳ یه ساخت سایت در حال انجامه.")
     if not port_up():
         return await m.answer("❌ سرویس سایت روی پورت %d بالا نیست.\nاول این رو بزن:\n"
-                              "<code>systemctl status pgbot-shop</code>" % SITE_PORT)
+                              "<code>systemctl status %s</code>" % (SITE_PORT, SHOP_SERVICE))
     r = await m.answer(h(S.render(10, 0, 0)))
     mid = r["message_id"] if isinstance(r, dict) else r.message_id
     last = {"t": ""}
@@ -224,18 +276,22 @@ async def swmsg(m: Message):
             return
         last["t"] = t
         try:
-            await m.bot.api("editMessageText", chat_id=m.chat_id, message_id=mid,
-                            text=h(t), parse_mode="HTML")
+            await m.bot.api("editMessageText", chat_id=m.chat_id, message_id=mid, text=h(t), parse_mode="HTML")
         except TgError:
             pass
 
     async with LOCK:
         ok, msg = await S.run_setup(d, SITE_PORT, text, progress)
     if ok:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        open(DOM_FILE, "w", encoding="utf-8").write(d)
+        old = current()
+        save(d)
+        if old and old != d:
+            await S._sh("rm -f /etc/nginx/sites-enabled/pgbot-%s /etc/nginx/sites-available/pgbot-%s "
+                        "&& nginx -t && systemctl reload nginx" % (old, old))
         await m.answer("🎉 سایت آماده شد!\n<code>" + h(msg) + "</code>",
-                       kb([[{"text": "🌐 باز کردن سایت", "url": msg}], [btn("🔙 مدیریت", "a:home")]]))
+                       kb([[{"text": "🌐 ورود به وب‌سایت", "url": msg}],
+                           [{"text": "🛠 ورود به پنل ادمین", "url": msg + "/admin"}],
+                           [btn("🔙 مدیریت", "a:home")]]))
     else:
         await m.answer("❌ ساخت سایت کامل نشد. تغییرات برگردونده شد.",
                        kb([[btn("🔁 تلاش دوباره", "sw:go")], [btn("🔙 مدیریت", "a:home")]]))

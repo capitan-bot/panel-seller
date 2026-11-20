@@ -321,6 +321,16 @@ do_ids() {
   echo -e "${GREEN}✔ Admin IDs changed and bot restarted.${RST}"
 }
 
+do_site() {
+  cd "$APP_DIR" || return
+  if ! ss -ltn | grep -q ":8788 "; then
+    echo -e "${RED}Site service is not running on port 8788 (pgbot-shop).${RST}"
+    echo "Start it first: systemctl status pgbot-shop"
+    return
+  fi
+  "$APP_DIR/venv/bin/python" -c "import asyncio; from bot import site_cli; asyncio.run(site_cli.main())"
+}
+
 source "$APP_DIR/theme.sh"
 # ---------- main loop ----------
 while true; do
@@ -338,6 +348,7 @@ while true; do
     7) do_token; pause;;
     8) do_ids; pause;;
     9) bash "$APP_DIR/webpanel_setup.sh"; pause;;
+    10) do_site; pause;;
     0) clear; exit 0;;
     *) ;;
   esac
