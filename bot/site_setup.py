@@ -4,11 +4,13 @@ import os
 import re
 import shutil
 import socket
+import urllib.error
 import urllib.request
 
 DOMAIN_RE = re.compile(r"^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 CONF_DIR = "/etc/nginx/sites-available"
 ENABLED_DIR = "/etc/nginx/sites-enabled"
+APT = "DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 -y"
 
 NGINX_TEMPLATE = """server {{
     listen 80;
@@ -108,8 +110,35 @@ def render(pct, done, current, error=None):
     return "\n".join(lines)
 
 
+async def apt_busy():
+    code, _ = await _sh("fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock", 15)
+    return code == 0
+
+
+async def wait_apt(progress, pct, done, cur, limit=900):
+    """Stops the automatic system update and waits until apt is free."""
+    if not await apt_busy():
+        return True
+    await _sh("systemctl stop --no-block apt-daily-upgrade.service apt-daily.service unattended-upgrades.service", 30)
+    waited = 0
+    while waited < limit:
+        if not await apt_busy():
+            return True
+        await progress(render(pct, done, cur) +
+                       "\n\n⏳ سیستم در حال آپدیت خودکاره؛ صبر می‌کنم... (%d ثانیه)" % waited)
+        await asyncio.sleep(10)
+        waited += 10
+    return not await apt_busy()
+
+
 async def run_setup(domain, port, email, progress, skip_dns=False):
-    """progress: async function, await progress(text). Returns (ok, message)."""
+    try:
+        return await _run(domain, port, email, progress, skip_dns)
+    finally:
+        await _sh("systemctl start unattended-upgrades.service", 30)
+
+
+async def _run(domain, port, email, progress, skip_dns):
     conf_name = "pgbot-" + domain
     avail = os.path.join(CONF_DIR, conf_name)
     enabled = os.path.join(ENABLED_DIR, conf_name)
@@ -120,51 +149,57 @@ async def run_setup(domain, port, email, progress, skip_dns=False):
         await progress(render(step * 10 + 10, step, step, msg))
         return False, msg
 
+    # 1) DNS
     await progress(render(10, 0, 0))
     ok, ip, got = await check_dns(domain)
     if not ok and not skip_dns:
         return await fail(0, "DNS با IP سرور نمی‌خونه.\nIP سرور: %s\nIP دامنه: %s" % (ip, ", ".join(got) or "پیدا نشد"))
 
+    # 2) nginx config (installs nginx if needed)
     await progress(render(30, 1, 1))
-
-    if (await _sh("fuser /var/lib/dpkg/lock-frontend"))[0] == 0:
-        await progress(render(30, 1, 1) + "\n\n⏳ سیستم در حال آپدیت خودکاره؛ تا چند دقیقه صبر می‌کنم...")
     if not shutil.which("nginx"):
-        busy = await _sh("ss -ltn | grep -E ':80 |:443 '")
-        if busy[1]:
-            return await fail(1, "پورت 80 یا 443 توسط برنامه‌ی دیگه‌ای اشغاله:\n" + busy[1])
-        code, out = await _sh("apt-get update -qq; DEBIAN_FRONTEND=noninteractive apt-get install -y nginx", 400)
+        code, busy = await _sh("ss -ltn | grep -E ':80 |:443 '")
+        if busy:
+            return await fail(1, "پورت 80 یا 443 توسط برنامه‌ی دیگه‌ای اشغاله:\n" + busy)
+        if not await wait_apt(progress, 30, 1, 1):
+            return await fail(1, "قفل apt آزاد نشد (آپدیت خودکار سیستم هنوز در حاله). چند دقیقه بعد دوباره امتحان کن.")
+        await _sh(APT + " update -qq", 300)
+        code, out = await _sh(APT + " install nginx", 800)
         if code:
             return await fail(1, out)
     conf = NGINX_TEMPLATE.format(domain=domain, port=port)
     tmp = "/tmp/" + conf_name
     with open(tmp, "w", encoding="utf-8") as f:
         f.write(conf)
-    code, out = await _sh("cp %s %s && ln -sf %s %s" % (tmp, avail, avail, enabled))
+    code, out = await _sh("mkdir -p %s %s && cp %s %s && ln -sf %s %s" % (CONF_DIR, ENABLED_DIR, tmp, avail, avail, enabled))
     if code:
         return await fail(1, out)
 
+    # 3) test and reload
     await progress(render(50, 2, 2))
     code, out = await _sh("nginx -t")
     if code:
         return await fail(2, out, rollback=True)
-    code, out = await _sh("systemctl reload nginx")
+    code, out = await _sh("systemctl enable nginx; systemctl reload nginx || systemctl restart nginx")
     if code:
         return await fail(2, out, rollback=True)
 
+    # 4) SSL
     await progress(render(70, 3, 3))
-
-    if (await _sh("fuser /var/lib/dpkg/lock-frontend"))[0] == 0:
-        await progress(render(70, 3, 3) + "\n\n⏳ سیستم در حال آپدیت خودکاره؛ تا چند دقیقه صبر می‌کنم...")
-    code, out = await _sh("DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-nginx", 400)
+    code, _ = await _sh("which certbot >/dev/null && dpkg -s python3-certbot-nginx >/dev/null 2>&1")
     if code:
-        return await fail(3, out)
+        if not await wait_apt(progress, 70, 3, 3):
+            return await fail(3, "قفل apt آزاد نشد (آپدیت خودکار سیستم هنوز در حاله). چند دقیقه بعد دوباره امتحان کن.", rollback=True)
+        code, out = await _sh(APT + " install certbot python3-certbot-nginx", 800)
+        if code:
+            return await fail(3, out, rollback=True)
+    mail = ("-m " + email) if email else "--register-unsafely-without-email"
     code, out = await _sh(
-        "certbot --nginx -d %s %s --agree-tos --non-interactive --redirect" % (
-            domain, ("-m " + email) if email else "--register-unsafely-without-email"), 240)
+        "certbot --nginx -d %s %s --agree-tos --no-eff-email --non-interactive --redirect" % (domain, mail), 300)
     if code:
-        return await fail(3, out)
+        return await fail(3, out, rollback=True)
 
+    # 5) final check
     await progress(render(90, 4, 4))
 
     def probe():
@@ -176,7 +211,12 @@ async def run_setup(domain, port, email, progress, skip_dns=False):
         except Exception as e:
             return str(e)
 
-    status = await asyncio.get_running_loop().run_in_executor(None, probe)
+    status = None
+    for _ in range(4):
+        status = await asyncio.get_running_loop().run_in_executor(None, probe)
+        if isinstance(status, int):
+            break
+        await asyncio.sleep(3)
     if not isinstance(status, int):
         return await fail(4, "سایت جواب نداد: %s" % status)
 
