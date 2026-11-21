@@ -16,7 +16,11 @@ def main():
     from . import landing
     from . import unify
     from . import admin
+    from . import shahin
+    from . import members
     app = web.Application(middlewares=[auth.guard])
+    from . import appearance
+    appearance.setup(app)
     app.on_startup.append(buy.startup)
     auth.install(app)
     pages.install(app)
