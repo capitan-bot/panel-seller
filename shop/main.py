@@ -18,6 +18,7 @@ def main():
     from . import admin
     from . import shahin
     from . import members
+    from . import members_plus
     app = web.Application(middlewares=[auth.guard])
     from . import appearance
     appearance.setup(app)

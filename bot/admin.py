@@ -453,6 +453,7 @@ async def settings_page(ev):
         [btn("💰 حداقل شارژ", "a:sv:min_charge"), btn("🎁 حجم تست", "a:sv:test_gb")],
         [btn("🔔 هشدار حجم: ✅ روشن" if warn else "🔔 هشدار حجم: ❌ خاموش", "a:tg:warn_on",
              style="success" if warn else "danger")],
+        [btn("🤖 پاسخگوی هوشمند", "ai:adm", style="primary")],
         [btn("🔙 مدیریت", "a:home", style="danger")],
     ]
     await show(ev, t, kb(rows))

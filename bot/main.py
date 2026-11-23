@@ -9,6 +9,7 @@ from . import invoice
 from .panel import get_pg
 from . import monitor
 from . import backup
+from . import ai
 from .tg import Bot, Dispatcher, TgError
 from .ui import h, load_ov
 
@@ -78,6 +79,7 @@ async def main() -> None:
     bot = Bot(config.BOT_TOKEN)
     report.init(bot)
     dp = Dispatcher(gate)
+    dp.include(ai.router)
     dp.include(sitewiz.router)
     dp.include(invoice.router)
     dp.include(admin.router)
