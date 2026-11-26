@@ -25,6 +25,7 @@ REG, FAILED = {}, {}
 SLUG = re.compile(r"^[a-z0-9-]{1,40}$")
 CORE = [("dash", "/admin", "🏠", "داشبورد"), ("site", "/admin/site", "✏️", "ویرایش سایت"),
         ("pages", "/admin/pages", "📄", "صفحه‌ها"), ("plugins", "/admin/plugins", "🧩", "افزونه‌ها"),
+        ("support", "/support/admin", "🎧", "پشتیبانی"),
         ("settings", "/admin/settings", "⚙️", "تنظیمات"), ("backup", "/admin/backup", "💾", "بکاپ")]
 CSS = ("<style>.adm{display:grid;grid-template-columns:210px 1fr;gap:16px;align-items:start}"
        ".am{display:flex;flex-direction:column;gap:4px;position:sticky;top:70px;padding:10px;background:var(--card);"
@@ -97,6 +98,7 @@ async def dash(req):
     cells = [("/admin/site", "✏️", "ویرایش سایت", "متن‌ها و تصویر صفحه‌ی اصلی"),
              ("/admin/pages", "📄", "صفحه‌ها", "%d صفحه" % len(s.get("pages", {}))),
              ("/admin/plugins", "🧩", "افزونه‌ها", "%d فعال از %d" % (len(on() & set(REG)), len(REG))),
+             ("/support/admin", "🎧", "پشتیبانی", "گفتگوهای کاربران و تنظیمات هوش مصنوعی"),
              ("/admin/settings", "⚙️", "تنظیمات", "عنوان سایت و اطلاعیه"),
              ("/admin/backup", "💾", "بکاپ", "دانلود zip")]
     body = '<div class="grid">' + "".join(

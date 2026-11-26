@@ -383,3 +383,20 @@ async def ensure_service():
 
 
 _fast_stop_dropin()
+
+
+# ---- VIP lock ----
+import functools as _ft
+from . import vip as _vip
+
+def _vip_lock(fn):
+    @_ft.wraps(fn)
+    async def w(ev, *a, **k):
+        if not await _vip.on("site"):
+            return await _vip.locked(ev, "site")
+        return await fn(ev, *a, **k)
+    return w
+
+router.cmds = [(n, _vip_lock(f)) for n, f in router.cmds]
+router.msgs = [(p, _vip_lock(f)) for p, f in router.msgs]
+router.cbs = [(p, _vip_lock(f)) for p, f in router.cbs]

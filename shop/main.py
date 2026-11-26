@@ -10,6 +10,7 @@ from . import auth, buy, manage, pages, wallet
 
 
 def main():
+    from . import support
     from . import theme
     auth.shell = theme.shell
     from . import skin
@@ -19,7 +20,7 @@ def main():
     from . import shahin
     from . import members
     from . import members_plus
-    app = web.Application(middlewares=[auth.guard])
+    app = web.Application(middlewares=[auth.guard, support.inject])
     from . import appearance
     appearance.setup(app)
     app.on_startup.append(buy.startup)
@@ -27,6 +28,7 @@ def main():
     pages.install(app)
     buy.install(app)
     wallet.install(app)
+    support.install(app)
     manage.install(app)
     app.router.add_static("/static/", A.ASSETS)
     port = int(os.environ.get("SHOP_PORT", "8788"))

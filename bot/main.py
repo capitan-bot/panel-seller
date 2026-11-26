@@ -4,7 +4,7 @@ import asyncio
 import logging
 import time
 
-from . import sitewiz, admin, btnadm, rating, webadm, kbmenu, usagecard, uiadm, config, db, manage, paneladm, report, stats, user, usersadm, warn
+from . import vip, sitewiz, admin, btnadm, rating, webadm, kbmenu, usagecard, uiadm, config, db, manage, paneladm, report, stats, user, usersadm, warn
 from . import invoice
 from .panel import get_pg
 from . import monitor
@@ -80,6 +80,7 @@ async def main() -> None:
     report.init(bot)
     dp = Dispatcher(gate)
     dp.include(ai.router)
+    dp.include(vip.router)
     dp.include(sitewiz.router)
     dp.include(invoice.router)
     dp.include(admin.router)

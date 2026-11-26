@@ -454,6 +454,7 @@ async def settings_page(ev):
         [btn("🔔 هشدار حجم: ✅ روشن" if warn else "🔔 هشدار حجم: ❌ خاموش", "a:tg:warn_on",
              style="success" if warn else "danger")],
         [btn("🤖 پاسخگوی هوشمند", "ai:adm", style="primary")],
+        [btn("💎 خرید VIP", "vp:buy")],
         [btn("🔙 مدیریت", "a:home", style="danger")],
     ]
     await show(ev, t, kb(rows))

@@ -105,6 +105,9 @@ async def chain():
 
 
 async def ai_ready():
+    from . import vip as _vip
+    if not await _vip.on("ai"):
+        return False
     return (await S("ai_on")) == "1" and bool(await chain())
 
 
